@@ -6,63 +6,67 @@ export default class Figure extends THREE.Group {
         super();
         this.params = {
             x: 0,
-            y: 1.4,
+            y: 0,
             z: 0,
             ry: 0,
         };
 
         // Position according to params
-        this.group.position.x = this.params.x;
-        this.group.position.y = this.params.y;
-        this.group.position.z = this.params.z;
+        this.position.x = this.params.x;
+        this.position.y = this.params.y;
+        this.position.z = this.params.z;
 
         var self = this;
-        const loader = new GTLFLoader();
+        const loader = new GLTFLoader();
         loader.load('RobotExpressive.glb', function (gltf) {
             self.add(gltf.scene);
-            loadAnimations(gltf.animatons);
+            self.loadAnimations(gltf.scene, gltf.animations);
         }, undefined, function (e) {
             console.error(e);
         })
     }
 
-    loadAnimations(animations) {
+    loadAnimations(model, animations) {
         this.mixer = new THREE.AnimationMixer(model);
         this.states = ["Idle", "Running", "Jump", "ThumbsUp"];
 
         this.actions = {};
+        
 
-        for (let i = 0; i < animations.length)
+        for (let i = 0; i < animations.length; i++) {
+            const clip = animations[i];
+            if (this.states.includes(clip.name)) {
+                const action = this.mixer.clipAction(clip);
+                this.actions[clip.name] = action;
+
+                if(clip.name === "Jump" || clip.name == "ThumbsUp") {
+                    action.clampWhenFinished = true;
+                    action.loop = THREE.LoopOnce;
+                }
+            }
+        }
+
+        this.state = "Idle"
+        this.actions[this.state].play();
     }
 
-    update() {
-        this.group.rotation.y = this.params.ry;
-        this.group.position.y = this.params.y;
-        this.group.position.x = this.params.x;
-        this.group.position.z = this.params.z;
-        this.arms.forEach((arm, index) => {
-            const m = index % 2 === 0 ? 1 : -1;
-            arm.rotation.z = this.params.armRotation * m;
-        });
-        this.head.rotation.z = this.params.headRotation;
-        this.leftEye.scale.y = this.leftEye.scale.z = this.leftEye.scale.x = this.params.leftEyeScale;
+    update(dt) {
+        this.rotation.y = this.params.ry;
+        this.position.y = this.params.y;
+        this.position.x = this.params.x;
+        this.position.z = this.params.z;
 
-        //arms animation
-        this.arms.forEach((arm, index) => {
-            const m = index % 2 === 0 ? 1 : -1;
-            // jump
-            arm.rotation.z = this.params.armRotation * m;
-            // walk
-            arm.rotation.x = this.params.walkRotation * -m;
-        })
-
-        //legs animation
-        this.legs.forEach((leg, index) => {
-            const m = index % 2 === 0 ? 1 : -1;
-            leg.rotation.x = this.params.walkRotation * m;
-        })
+        if (this.mixer) {
+            this.mixer.update(dt);
+        }
     }
 
-    init() {
+    fadeToAction(animationName, fadeDuration){
+        if (!this.actions) return;
+        if (animationName === this.state) return;
+        this.actions[this.state].fadeOut(fadeDuration);
+        this.actions[animationName].reset().fadeIn(fadeDuration).play();
+
+        this.state = animationName;
     }
 }

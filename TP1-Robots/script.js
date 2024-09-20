@@ -2,11 +2,13 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import Stats from 'three/addons/libs/stats.module.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
 import Bullet from './bullet.js';
 import Figure from './figure.js';
 
-gsap.registerPlugin(CustomEase); 
+gsap.registerPlugin(CustomEase);
 
 // Scene
 const scene = new THREE.Scene();
@@ -75,10 +77,6 @@ window.addEventListener('resize', () => {
     renderer.render(scene, camera);
 });
 
-// Controls
-const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true;
-
 // Stats
 const container = document.getElementById('container');
 const stats = new Stats();
@@ -103,21 +101,8 @@ const degreesToRadians = (degrees) => {
 }
 
 const figure = new Figure();
-figure.init();
+scene.add(figure);
 
-// gsap.to(figure.params, {
-// 	ry: degreesToRadians(360),
-// 	repeat: -1,
-// 	duration: 20
-// })
-
-// gsap.to(figure.params, {
-// 	y: 3,
-// 	armRotation: degreesToRadians(90),
-// 	repeat: -1,
-// 	yoyo: true,
-// 	duration: 0.5
-// })
 
 let leftKeyIsDown = false;
 let rightKeyIsDown = false;
@@ -131,7 +116,6 @@ document.addEventListener('keydown', (event) => {
     if ((event.key == ' ') && (jumpTimeline.isActive() == false)) {
         jumpTimeline.to(figure.params, {
             y: 3,
-            armRotation: degreesToRadians(90),
             repeat: 1,
             yoyo: true,
             duration: 0.5,
@@ -139,100 +123,81 @@ document.addEventListener('keydown', (event) => {
         });
     }
     if (event.key == 'ArrowUp') {
-        idleTimeline.pause(0);
-        // figure.params.ry -= 0.05;
         upKeyIsDown = true;
     }
 });
 
 document.addEventListener('keydown', (event) => {
     if (event.key == 'q') {
-        idleTimeline.pause(0);
         leftKeyIsDown = true;
     }
 });
 document.addEventListener('keydown', (event) => {
     if (event.key == 'd') {
-        idleTimeline.pause(0);
         rightKeyIsDown = true;
     }
 });
 document.addEventListener('keydown', (event) => {
     if (event.key == 'z') {
-        idleTimeline.pause(0);
         upKeyIsDown = true;
     }
 });
 
 document.addEventListener('keyup', (event) => {
     if (event.key == 'q') {
-        idleTimeline.pause(0);
         leftKeyIsDown = false;
     }
 });
 document.addEventListener('keyup', (event) => {
     if (event.key == 'd') {
-        idleTimeline.pause(0);
         rightKeyIsDown = false;
     }
 });
 document.addEventListener('keyup', (event) => {
     if (event.key == 'z') {
-        idleTimeline.pause(0);
         upKeyIsDown = false;
     }
 });
 
 
+//Text facing the camera
+let text = null;
+const fontLoader = new FontLoader();
+const myFont = "fonts/helvetiker_regular.typeface.json";
+const textMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+function createText(count) {
+    scene.remove(text);
+    fontLoader.load(myFont, (font) => {
+        const textGeometry = new TextGeometry('shots: ' + count, {
+            font: font,
+            size: 1,
+            height: 0.2,
+            curveSegments: 12,
+            bevelEnabled: true,
+            bevelThickness: 0.03,
+            bevelSize: 0.02,
+            bevelOffset: 0,
+            bevelSegments: 5
+        });
+        text = new THREE.Mesh(textGeometry, textMaterial);
+        text.position.set(0, 2, 0);
+        scene.add(text);
+    })
+}
+createText(0);
+
 // tir
 let bullets = [];
-document.addEventListener('keydown', (event)=>{
+document.addEventListener('keydown', (event) => {
     if (event.key === 'f') {
+        createText(bullets.length);
         let bullet = new Bullet(figure.params.x, figure.params.y, figure.params.z, figure.params.ry);
         scene.add(bullet);
         bullets.push(bullet);
     }
 });
 
-let idleTimeline = gsap.timeline();
-idleTimeline.to(figure.params,
-    {
-        headRotation: 0.25,
-        repeat: -1,
-        yoyo: true,
-        duration: 0.75,
-        delay: 2.5,
-        ease: "power1.inOut"
-    }
-)
-idleTimeline.to(figure.params,
-    {
-        leftEyeScale: 1.25,
-        repeat: -1,
-        yoyo: true,
-        duration: 1,
-        ease: "elastic.in"
-    }, ">2.2"
-)
-
-let walkTimeline = gsap.timeline();
-walkTimeline.to(figure.params,
-    {
-        walkRotation: degreesToRadians(45),
-        repeat: 1,
-        yoyo: true,
-        duration: 0.25,
-    }
-)
-walkTimeline.to(figure.params,
-    {
-        walkRotation: degreesToRadians(-45),
-        repeat: 1,
-        yoyo: true,
-        duration: 0.25,
-    }, ">"
-)
-walkTimeline.pause();
+let clock = new THREE.Clock;
 
 // Main loop
 gsap.ticker.add(() => {
@@ -249,14 +214,19 @@ gsap.ticker.add(() => {
     if (upKeyIsDown)
         walkSpeed += 0.003;
 
-    if (walkSpeed >= 0.01 && !walkTimeline.isActive()) {
-        idleTimeline.pause();
-        walkTimeline.restart();
+    if (jumpTimeline.isActive()) {
+
+        figure.fadeToAction("Jump", 0.25);
+    }
+
+    else if (walkSpeed >= 0.01) {
+
+        figure.fadeToAction("Running", 0.25);
     }
 
 
-    if ((!idleTimeline.isActive()) && (!jumpTimeline.isActive()) && (walkTimeline.isActive()) && (rySpeed < 0.01) && (walkSpeed < 0.01)) {
-        idleTimeline.restart();
+    else if ((!jumpTimeline.isActive()) && (rySpeed < 0.01) && (walkSpeed < 0.01)) {
+        figure.fadeToAction("Idle", 0.25);
     }
 
     //update ratation
@@ -268,8 +238,10 @@ gsap.ticker.add(() => {
     figure.params.z = figure.params.z + walkSpeed * Math.cos(figure.params.ry);
     walkSpeed *= 0.95;
 
+    let deltaTime = clock.getDelta();
+
     // maj de balles
-    for (let i = bullets.length - 1 ; i >= 0 ; i--) {
+    for (let i = bullets.length - 1; i >= 0; i--) {
         if (bullets[i].isAlive()) {
             bullets[i].update();
         }
@@ -279,9 +251,29 @@ gsap.ticker.add(() => {
         }
     }
 
-    figure.update();
-    controls.update();
+    // Positionnement
+    let localCameraPosition = new THREE.Vector3(0, 5, -25);
+    figure.localToWorld(localCameraPosition);
+    camera.position.copy(localCameraPosition);
+
+    // quoi regarder
+    camera.lookAt(new THREE.Vector3(figure.position.x, 5, figure.position.z))
+
+    // maj des matrices
+    camera.updateProjectionMatrix();
+
+
+    figure.update(deltaTime);
     stats.update();
+
+    // update the position and orientation of the text
+    if (text) {
+        const localTextPosition = new THREE.Vector3(-2, 5, -20);
+        const textPosition = camera.localToWorld(localTextPosition);
+        text.lookAt(camera.position);
+        text.position.copy(textPosition);
+    }
+
     renderer.render(scene, camera);
 });
 
